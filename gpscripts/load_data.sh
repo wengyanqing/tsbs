@@ -1,0 +1,13 @@
+TSBS_HOME=/Users/iweng/workspace/gopath/src/github.com/wengyanqing/tsbs
+
+NUM_WORKERS=2 \
+BATCH_SIZE=10000 \
+BULK_DATA_DIR=`pwd` \
+DATABASE_NAME=tsbs \
+PG_DATABASE=tsbs \
+DATABASE_USER=iweng \
+USE_HYPERTABLE=false \
+PARTITION_TIMESTAMP_START="2016-01-01T00:00:00Z" \
+PARTITION_TIMESTAMP_END="2016-01-04T00:00:01Z" \
+PARTITION_TIMESTAMP_INTERVAL="8 hour" \
+${TSBS_HOME}/scripts/load_greenplum.sh
