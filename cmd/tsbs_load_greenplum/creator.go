@@ -204,7 +204,9 @@ func (d *dbCreator) getFieldAndIndexDefinitions(columns []string) ([]string, []s
 func (d *dbCreator) createTableAndIndexes(dbBench *sql.DB, tableName string, fieldDefs []string, indexDefs []string) {
 	MustExec(dbBench, fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
 	MustExec(dbBench, fmt.Sprintf("CREATE TABLE %s (time timestamptz, tags_id integer, %s, additional_tags JSONB DEFAULT NULL)"+
-		" DISTRIBUTED BY (tags_id)"+
+		//" DISTRIBUTED BY (tags_id)"+
+		" WITH (appendoptimized=true, orientation=column, compresstype=zstd, compresslevel=9)"+
+		" DISTRIBUTED RANDOMLY"+
 		" PARTITION BY RANGE(time) (START (timestamp '%s') INCLUSIVE END(timestamp '%s')  EXCLUSIVE EVERY (INTERVAL '%s'),"+
 		" DEFAULT PARTITION default_%s)",
 		tableName, strings.Join(fieldDefs, ","),
@@ -261,14 +263,19 @@ func (d *dbCreator) getCreateIndexOnFieldCmds(hypertable, field, idxType string)
 func createTagsTable(db *sql.DB, tagNames, tagTypes []string) {
 	MustExec(db, "DROP TABLE IF EXISTS tags")
 	if useJSON {
-		MustExec(db, "CREATE TABLE tags(id SERIAL PRIMARY KEY, tagset JSONB) DISTRIBUTED BY (id)")
+		//MustExec(db, "CREATE TABLE tags(id SERIAL PRIMARY KEY, tagset JSONB) DISTRIBUTED BY (id)")
 		//MustExec(db, "CREATE UNIQUE INDEX uniq1 ON tags(tagset)")
+		MustExec(db, "CREATE TABLE tags(id SERIAL PRIMARY KEY, tagset JSONB) DISTRIBUTED REPLICATED")
+		MustExec(db, "ALTER SEQUENCE tags_id_seq CACHE 100")
+		MustExec(db, "CREATE UNIQUE INDEX uniq1 ON tags(tagset)")
 		MustExec(db, "CREATE INDEX idxginp ON tags USING gin (tagset jsonb_path_ops);")
 		return
 	}
 
 	MustExec(db, generateTagsTableQuery(tagNames, tagTypes))
 	//MustExec(db, fmt.Sprintf("CREATE UNIQUE INDEX uniq1 ON tags(%s)", strings.Join(tagNames, ",")))
+	MustExec(db, fmt.Sprintf("CREATE UNIQUE INDEX uniq1 ON tags(%s)", strings.Join(tagNames, ",")))
+	MustExec(db, "ALTER SEQUENCE tags_id_seq CACHE 100")
 	MustExec(db, fmt.Sprintf("CREATE INDEX ON tags(%s)", tagNames[0]))
 }
 
@@ -280,7 +287,8 @@ func generateTagsTableQuery(tagNames, tagTypes []string) string {
 	}
 
 	cols := strings.Join(tagColumnDefinitions, ", ")
-	return fmt.Sprintf("CREATE TABLE tags(id SERIAL PRIMARY KEY, %s)", cols)
+	//return fmt.Sprintf("CREATE TABLE tags(id SERIAL PRIMARY KEY, %s)", cols)
+	return fmt.Sprintf("CREATE TABLE tags(id SERIAL PRIMARY KEY, %s) DISTRIBUTED REPLICATED", cols)
 }
 
 func extractTagNamesAndTypes(tags []string) ([]string, []string) {
